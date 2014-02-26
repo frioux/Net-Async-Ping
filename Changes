@@ -1,0 +1,7 @@
+Revision history for {{$dist->name}}
+
+{{$NEXT}}
+ - Add missing Changes file
+
+0.001000 Wed Feb 26 12:23 2014
+ - Initial Release
