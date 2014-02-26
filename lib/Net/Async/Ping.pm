@@ -47,7 +47,7 @@ sub new {
  my $p = Net::Async::Ping->new;
  my $loop = IO::Async::Loop->new;
 
- my $future = $p->ping('myrealbox.com');
+ my $future = $p->ping($loop, 'myrealbox.com');
 
  $future->on_done(sub {
     say "good job the host is running!"
