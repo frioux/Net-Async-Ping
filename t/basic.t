@@ -11,9 +11,11 @@ my $l = IO::Async::Loop->new;
 $p->ping($l, 'localhost')
    ->then(sub {
       pass 'pinged localhost!';
+      note("success future: @_");
       Future->done
    })->else(sub {
       fail 'pinged localhost!';
+      note("failure future: @_");
       Future->fail('failed to ping localhost!')
    })->get;
 
@@ -21,9 +23,11 @@ $p->ping($l, 'localhost')
 my $f = $p->ping($l, '192.0.2.0')
    ->then(sub {
       fail q(couldn't reach 192.0.2.0);
+      note("success future: @_");
       Future->done
    })->else(sub {
       pass q(couldn't reach 192.0.2.0);
+      note("failure future: @_");
       Future->fail('expected failure')
    });
 
