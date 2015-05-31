@@ -47,7 +47,7 @@ sub ping {
       sub {
          my ($human, $layer) = @_;
          my $ex    = pop;
-         if ($layer eq 'connect') {
+         if ($layer && $layer eq 'connect') {
             return Future->wrap(Time::HiRes::tv_interval($t0))
                if !$service_check && $ex == ECONNREFUSED;
          }
