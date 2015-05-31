@@ -43,15 +43,15 @@ sub ping {
       $loop->timeout_future(after => $timeout)
    )
    ->then(
-      sub { Future->wrap(Time::HiRes::tv_interval($t0)) },
+      sub { Future->done(Time::HiRes::tv_interval($t0)) },
       sub {
          my ($human, $layer) = @_;
          my $ex    = pop;
          if ($layer && $layer eq 'connect') {
-            return Future->wrap(Time::HiRes::tv_interval($t0))
+            return Future->done(Time::HiRes::tv_interval($t0))
                if !$service_check && $ex == ECONNREFUSED;
          }
-         Future->new->die(Time::HiRes::tv_interval($t0))
+         Future->fail(Time::HiRes::tv_interval($t0))
       },
    )
 }
