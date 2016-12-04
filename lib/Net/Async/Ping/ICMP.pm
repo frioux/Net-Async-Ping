@@ -22,6 +22,8 @@ use constant SUBCODE          => 0; # No ICMP subcode for ECHO and ECHOREPLY
 use constant ICMP_FLAGS       => 0; # No special flags for send or recv
 use constant ICMP_PORT        => 0; # No port with ICMP
 
+extends 'IO::Async::Notifier';
+
 use namespace::clean;
 
 has default_timeout => (
@@ -34,7 +36,12 @@ has service_check => ( is => 'rw' );
 has bind => ( is => 'rw' );
 
 sub ping {
-    my ($self, $loop, $host, $timeout) = @_;
+    my $self = shift;
+    # Maintain compat with old API
+    my $legacy = ref $_[0] eq 'IO::Async::Loop::Poll';
+    my $loop   = $legacy ? shift : $self->loop;
+
+    my ($host, $timeout) = @_;
     $timeout ||= $self->default_timeout;
 
     my $service_check = $self->service_check;
@@ -66,8 +73,15 @@ sub ping {
 
     my $socket = IO::Async::Socket->new(
         handle => $fh,
-        on_recv => sub {
-            my ( $self, $recv_msg, $from_saddr ) = @_;
+        on_recv_error => sub {
+            my ( $self, $errno ) = @_;
+            $f->fail('Receive error');
+        },
+    );
+
+    my $on_recv = $self->_capture_weakself(
+        sub {
+            my ( $ping, $self, $recv_msg, $from_saddr ) = @_;
 
             my $from_pid = -1;
             my $from_seq = -1;
@@ -93,19 +107,13 @@ sub ping {
                 } elsif ($from_type == ICMP_TIME_EXCEEDED) {
                     $f->fail('ICMP Timeout');
                 }
-                $loop->remove($self);
+                $legacy ? $loop->remove($socket) : $ping->remove_child($socket);
             }
-        },
-        on_recv_error => sub {
-            my ( $self, $errno ) = @_;
-            $f->fail('Receive error');
         },
     );
 
-    # XXX Using add() here can't be right, especially as it has
-    # to be removed above. What's the correct solution though?
-    # The on_recv code is not called otherwise.
-    $loop->add($socket);
+    $socket->configure(on_recv => $on_recv);
+    $legacy ? $loop->add($socket) : $self->add_child($socket);
     $socket->send( $msg, ICMP_FLAGS, $saddr );
 
     return Future->wait_any(
