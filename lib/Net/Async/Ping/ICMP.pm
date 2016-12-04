@@ -42,7 +42,7 @@ sub ping {
     my $loop   = $legacy ? shift : $self->loop;
 
     my ($host, $timeout) = @_;
-    $timeout ||= $self->default_timeout;
+    $timeout //= $self->default_timeout;
 
     my $service_check = $self->service_check;
 
