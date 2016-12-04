@@ -35,6 +35,20 @@ has service_check => ( is => 'rw' );
 
 has bind => ( is => 'rw' );
 
+has pid => (
+    is => 'lazy',
+);
+
+sub _build_pid
+{   my $self = shift;
+    $$ & 0xffff;
+}
+
+has seq => (
+    is      => 'ro',
+    default => 1,
+);
+
 sub ping {
     my $self = shift;
     # Maintain compat with old API
@@ -54,17 +68,6 @@ sub ping {
     socket($fh, PF_INET, SOCK_RAW, $proto_num) ||
         croak("icmp socket error - $!");
 
-    # data_size to be implemented later
-    my $data_size = 0;
-    my $data = '';
-    my $checksum = 0;
-    my $pid = $$ & 0xffff;
-    my $seq = 1;
-    my $msg = pack(ICMP_STRUCT . $data_size, ICMP_ECHO, SUBCODE,
-        $checksum, $pid, $seq, $data);
-    $checksum = Net::Ping->checksum($msg); # Subroutine could be copied from module
-    $msg = pack(ICMP_STRUCT . $data_size, ICMP_ECHO, SUBCODE,
-        $checksum, $pid, $seq, $data);
 
     my $ip = inet_aton($host);
     my $saddr = sockaddr_in(ICMP_PORT, $ip);
@@ -95,8 +98,8 @@ sub ping {
                 ($from_pid, $from_seq) = unpack("n3", substr($recv_msg, 52, 4))
                     if length $recv_msg >= 56;
             }
-            return if ($from_pid != $pid);
-            return if ($from_seq != $seq);
+            return if ($from_pid != $ping->pid);
+            return if ($from_seq != $ping->seq);
 
             my $ip = inet_aton($host);
             if ( (ntop($from_ip) eq ntop($ip))) { # Does the packet check out?
@@ -114,7 +117,7 @@ sub ping {
 
     $socket->configure(on_recv => $on_recv);
     $legacy ? $loop->add($socket) : $self->add_child($socket);
-    $socket->send( $msg, ICMP_FLAGS, $saddr );
+    $socket->send( $self->_msg, ICMP_FLAGS, $saddr );
 
     return Future->wait_any(
        $f,
@@ -132,6 +135,20 @@ sub ping {
             Future->fail(Time::HiRes::tv_interval($t0))
         },
     )
+}
+
+sub _msg
+{   my $self = shift;
+    # data_size to be implemented later
+    my $data_size = 0;
+    my $data      = '';
+    my $checksum  = 0;
+    my $msg = pack(ICMP_STRUCT . $data_size, ICMP_ECHO, SUBCODE,
+        $checksum, $self->pid, $self->seq, $data);
+    $checksum = Net::Ping->checksum($msg);
+    $msg = pack(ICMP_STRUCT . $data_size, ICMP_ECHO, SUBCODE,
+        $checksum, $self->pid, $self->seq, $data);
+    return $msg;
 }
 
 # Copied straight from Net::Ping
