@@ -10,7 +10,7 @@ use Carp;
 use Net::Ping;
 use IO::Async::Socket;
 
-use Socket qw( SOCK_RAW SOCK_DGRAM PF_INET NI_NUMERICHOST inet_aton sockaddr_in getnameinfo);
+use Socket qw( SOCK_RAW SOCK_DGRAM PF_INET NI_NUMERICHOST inet_aton pack_sockaddr_in unpack_sockaddr_in getnameinfo);
 
 use constant ICMP_ECHOREPLY   => 0; # ICMP packet types
 use constant ICMP_UNREACHABLE => 3; # ICMP packet types
@@ -71,7 +71,7 @@ sub ping {
     if (socket($fh, PF_INET, SOCK_DGRAM, $proto_num))
     {
         $ping_socket = 1;
-        ($ident) = sockaddr_in getsockname($fh);
+        ($ident) = unpack_sockaddr_in getsockname($fh);
     }
     else {
         socket($fh, PF_INET, SOCK_RAW, $proto_num) ||
@@ -82,7 +82,7 @@ sub ping {
     }
 
     my $ip = inet_aton($host);
-    my $saddr = sockaddr_in(ICMP_PORT, $ip);
+    my $saddr = pack_sockaddr_in(ICMP_PORT, $ip);
 
     my $f = $loop->new_future;
 
@@ -100,7 +100,7 @@ sub ping {
 
             my $from_pid = -1;
             my $from_seq = -1;
-            my ($from_port, $from_ip) = sockaddr_in($from_saddr);
+            my ($from_port, $from_ip) = unpack_sockaddr_in($from_saddr);
             my $offset = $ping_socket ? 0 : 20; # No offset needed for ping sockets
             my ($from_type, $from_subcode) = unpack("C2", substr($recv_msg, $offset, 2));
 
@@ -177,7 +177,7 @@ sub ntop {
     # Any port will work, even undef, but this will work for now.
     # Socket warns when undef is passed in, but it still works.
     my $port = getservbyname('echo', 'udp');
-    my $sockaddr = sockaddr_in $port, $ip;
+    my $sockaddr = pack_sockaddr_in $port, $ip;
     my ($error, $address) = getnameinfo($sockaddr, NI_NUMERICHOST);
     if($error) {
       croak $error;
