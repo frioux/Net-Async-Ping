@@ -10,7 +10,7 @@ use Carp;
 use Net::Ping;
 use IO::Async::Socket;
 
-use Socket qw( SOCK_RAW PF_INET NI_NUMERICHOST inet_aton sockaddr_in getnameinfo);
+use Socket qw( SOCK_RAW SOCK_DGRAM PF_INET NI_NUMERICHOST inet_aton sockaddr_in getnameinfo);
 
 use constant ICMP_ECHOREPLY   => 0; # ICMP packet types
 use constant ICMP_UNREACHABLE => 3; # ICMP packet types
@@ -65,9 +65,21 @@ sub ping {
     my $fh = IO::Socket->new;
     my $proto_num = (getprotobyname('icmp'))[2] ||
         croak("Can't get icmp protocol by name");
-    socket($fh, PF_INET, SOCK_RAW, $proto_num) ||
-        croak("icmp socket error - $!");
-
+    # Let's try a ping socket (unprivileged ping) first. See
+    # https://lwn.net/Articles/422330/
+    my ($ping_socket, $ident);
+    if (socket($fh, PF_INET, SOCK_DGRAM, $proto_num))
+    {
+        $ping_socket = 1;
+        ($ident) = sockaddr_in getsockname($fh);
+    }
+    else {
+        socket($fh, PF_INET, SOCK_RAW, $proto_num) ||
+            croak("Unable to create ICMP socket ($!). Are you running as root?"
+              ." If not, and your system supports ping sockets, try setting"
+              ." /proc/sys/net/ipv4/ping_group_range");
+        $ident = $self->pid;
+    }
 
     my $ip = inet_aton($host);
     my $saddr = sockaddr_in(ICMP_PORT, $ip);
@@ -89,17 +101,19 @@ sub ping {
             my $from_pid = -1;
             my $from_seq = -1;
             my ($from_port, $from_ip) = sockaddr_in($from_saddr);
-            my ($from_type, $from_subcode) = unpack("C2", substr($recv_msg, 20, 2));
+            my $offset = $ping_socket ? 0 : 20; # No offset needed for ping sockets
+            my ($from_type, $from_subcode) = unpack("C2", substr($recv_msg, $offset, 2));
 
             if ($from_type == ICMP_ECHOREPLY) {
-                ($from_pid, $from_seq) = unpack("n3", substr($recv_msg, 24, 4))
-                    if length $recv_msg >= 28;
+                ($from_pid, $from_seq) = unpack("n3", substr($recv_msg, $offset + 4, 4))
+                    if length $recv_msg >= $offset + 8;
             } else {
-                ($from_pid, $from_seq) = unpack("n3", substr($recv_msg, 52, 4))
-                    if length $recv_msg >= 56;
+                ($from_pid, $from_seq) = unpack("n3", substr($recv_msg, $offset + 32, 4))
+                    if length $recv_msg >= $offset + 36;
             }
-            return if ($from_pid != $ping->pid);
-            return if ($from_seq != $ping->seq);
+            # Not needed for ping socket - kernel handles this for us
+            return if !$ping_socket && $from_pid != $ping->ident;
+            return if $from_seq != $ping->seq;
 
             my $ip = inet_aton($host);
             if ( (ntop($from_ip) eq ntop($ip))) { # Does the packet check out?
@@ -117,7 +131,8 @@ sub ping {
 
     $socket->configure(on_recv => $on_recv);
     $legacy ? $loop->add($socket) : $self->add_child($socket);
-    $socket->send( $self->_msg, ICMP_FLAGS, $saddr );
+    $socket->send( $self->_msg($ident), ICMP_FLAGS, $saddr );
+
 
     return Future->wait_any(
        $f,
@@ -138,16 +153,16 @@ sub ping {
 }
 
 sub _msg
-{   my $self = shift;
+{   my ($self, $ident) = @_;
     # data_size to be implemented later
     my $data_size = 0;
     my $data      = '';
     my $checksum  = 0;
     my $msg = pack(ICMP_STRUCT . $data_size, ICMP_ECHO, SUBCODE,
-        $checksum, $self->pid, $self->seq, $data);
+        $checksum, $ident, $self->seq, $data);
     $checksum = Net::Ping->checksum($msg);
     $msg = pack(ICMP_STRUCT . $data_size, ICMP_ECHO, SUBCODE,
-        $checksum, $self->pid, $self->seq, $data);
+        $checksum, $ident, $self->seq, $data);
     return $msg;
 }
 
