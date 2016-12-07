@@ -49,6 +49,17 @@ has seq => (
     default => 1,
 );
 
+# Overrides method in IO::Async::Notifier to allow specific options in this class
+sub configure_unknown
+{   my $self = shift;
+    my %params = @_;
+    delete $params{$_} foreach qw/default_timeout service_check bind pid seq/;
+    return unless keys %params;
+    my $class = ref $self;
+    croak "Unrecognised configuration keys for $class - " . join( " ", keys %params );
+
+}
+
 sub ping {
     my $self = shift;
     # Maintain compat with old API
