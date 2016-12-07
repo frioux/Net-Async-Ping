@@ -198,13 +198,57 @@ Net::Async::Ping::ICMP
 
 version 0.001001
 
+=head1 DESCRIPTION
+
+This is the ICMP part of L<Net::Async::Ping>. See that documentation for full
+details.
+
+=head2 ICMP methods
+
+This module will first attempt to use a ping socket to send its ICMP packets,
+which does not need root privileges. These are only supported on Linux, and
+only when the group is stipulated in C</proc/sys/net/ipv4/ping_group_range>.
+Failing that, the module will send standard RAW packets, which will fail if
+attempted from a non-privileged account.
+
+To disable the attempt to send from a ping socket, set C<use_ping_socket> to
+0 when initiating the object:
+
+ my $p = Net::Async::Ping->new(
+   icmp => {
+      use_ping_socket => 0,
+   },
+ );
+
+=head2 Return value
+
+L<Net::Async::Ping::ICMP> will return the hires time on success. On failure, it
+will return the future from L<IO::Async::Resolver> if that failed. Otherwise,
+it will return as a future failure:
+
+=over 4
+
+=item "ICMP Unreachable"
+
+ICMP response was ICMP_UNREACHABLE
+
+=item "ICMP Timeout"
+
+ICMP response was ICMP_TIME_EXCEEDED
+
+=item "Receive error"
+
+An error was received from L<IO::Async::Socket>.
+
+=back
+
 =head1 AUTHOR
 
 Andy Beverley <andy@andybev.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2015 by Arthur Axel "fREW" Schmidt.
+This software is copyright (c) 2016 by Arthur Axel "fREW" Schmidt and Andy Beverley.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
