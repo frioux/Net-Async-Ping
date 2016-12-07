@@ -116,7 +116,15 @@ options.
 
  my $future = $p->ping($loop, $host, $timeout);
 
-Returns a L<Future> representing the ping.  C<loop> should be an L<IO::Async::Loop>, host is the host, and timeout is optional and defaults to the default set above.
+Returns a L<Future> representing the ping.  C<loop> should be an
+L<IO::Async::Loop>, host is the host, and timeout is optional and defaults to
+the default set above.
+
+It's also possible to omit the $loop, and add the pinger to a loop afterwards:
+
+ my $loop = IO::Async::Loop->new;
+ $p->ping($host);
+ $loop->add( $p );
 
 The return value of the future depends on the protocol. See
 L<Net::Async::Ping::TCP> and L<Net::Async::Ping::ICMP>.
