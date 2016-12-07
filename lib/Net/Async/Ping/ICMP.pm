@@ -49,11 +49,18 @@ has seq => (
     default => 1,
 );
 
+# Whether to try and use ping sockets. This option used in tests
+# to force normal ping to be used
+has use_ping_socket => (
+    is      => 'ro',
+    default => 1,
+);
+
 # Overrides method in IO::Async::Notifier to allow specific options in this class
 sub configure_unknown
 {   my $self = shift;
     my %params = @_;
-    delete $params{$_} foreach qw/default_timeout service_check bind pid seq/;
+    delete $params{$_} foreach qw/default_timeout service_check bind seq use_ping_socket/;
     return unless keys %params;
     my $class = ref $self;
     croak "Unrecognised configuration keys for $class - " . join( " ", keys %params );
@@ -79,7 +86,7 @@ sub ping {
     # Let's try a ping socket (unprivileged ping) first. See
     # https://lwn.net/Articles/422330/
     my ($ping_socket, $ident);
-    if (socket($fh, AF_INET, SOCK_DGRAM, $proto_num))
+    if ($self->use_ping_socket && socket($fh, AF_INET, SOCK_DGRAM, $proto_num))
     {
         $ping_socket = 1;
         ($ident) = unpack_sockaddr_in getsockname($fh);
