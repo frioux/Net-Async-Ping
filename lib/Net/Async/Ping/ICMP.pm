@@ -118,7 +118,8 @@ sub ping {
 
         my $on_recv = $self->_capture_weakself(
             sub {
-                my ( $ping, $self, $recv_msg, $from_saddr ) = @_;
+                my $ping = shift or return; # weakref, may have disappeared
+                my ( $self, $recv_msg, $from_saddr ) = @_;
 
                 my $from_pid = -1;
                 my $from_seq = -1;
