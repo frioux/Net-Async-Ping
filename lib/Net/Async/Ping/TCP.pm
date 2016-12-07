@@ -3,9 +3,12 @@ package Net::Async::Ping::TCP;
 use Moo;
 use warnings NONFATAL => 'all';
 
+use Carp qw/croak/;
 use Future;
 use POSIX 'ECONNREFUSED';
 use Time::HiRes;
+
+extends 'IO::Async::Notifier';
 
 use namespace::clean;
 
@@ -23,8 +26,24 @@ has port_number => (
    default => 7,
 );
 
+# Overrides method in IO::Async::Notifier to allow specific options in this class
+sub configure_unknown
+{   my $self = shift;
+    my %params = @_;
+    delete $params{$_} foreach qw/default_timeout service_check bind/;
+    return unless keys %params;
+    my $class = ref $self;
+    croak "Unrecognised configuration keys for $class - " . join( " ", keys %params );
+
+}
+
 sub ping {
-   my ($self, $loop, $host, $timeout) = @_;
+    my $self = shift;
+    # Maintain compat with old API
+    my $legacy = ref $_[0] eq 'IO::Async::Loop::Poll';
+    my $loop   = $legacy ? shift : $self->loop;
+
+   my ($host, $timeout) = @_;
    $timeout ||= $self->default_timeout;
 
    my $service_check = $self->service_check;
