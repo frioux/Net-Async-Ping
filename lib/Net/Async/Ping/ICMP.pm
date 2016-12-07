@@ -99,6 +99,13 @@ sub ping {
         $ident = $self->_pid;
     }
 
+    if ($self->bind)
+    {
+        my $bind = pack_sockaddr_in 0, inet_aton $self->bind;
+        bind $fh, $bind
+            or croak "Failed to bind to ".$self->bind;
+    }
+
     $loop->resolver->getaddrinfo(
        host     => $host,
        protocol => $proto_num,
