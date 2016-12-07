@@ -135,7 +135,7 @@ sub ping {
                         if length $recv_msg >= $offset + 36;
                 }
                 # Not needed for ping socket - kernel handles this for us
-                return if !$ping_socket && $from_pid != $ping->ident;
+                return if !$ping_socket && $from_pid != $ping->pid;
                 return if $from_seq != $ping->seq;
                 my $ip = unpack_sockaddr_in($saddr);
                 return if inet_ntop(AF_INET, $from_ip) ne inet_ntop(AF_INET, $ip); # Does the packet check out?
