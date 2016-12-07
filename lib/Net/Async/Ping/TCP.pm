@@ -76,3 +76,36 @@ sub ping {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Net::Async::Ping::TCP
+
+=head1 DESCRIPTION
+
+This is the TCP part of L<Net::Async::Ping>. See that documentation for full details.
+
+=head2 Return value
+
+L<Net::Async::Ping::TCP> will always terminate with the hi resolution time it
+took to check for liveness, with the success or failure checked by
+introspecting the future itself.
+
+=head2 Additional options
+
+C<service_check>, which is off by default, will cause ping to fail if the host refuses
+connection to the selected port (7 by default.)
+
+ my $p = Net::Async::Ping->new(
+   tcp => {
+      service_check => 1,
+   },
+ );
+
+=cut

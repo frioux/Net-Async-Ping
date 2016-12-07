@@ -57,11 +57,29 @@ sub new {
     say "the host is down!!!";
  });
 
+ # With a timer
+ my $timer;
+ $timer = IO::Async::Timer::Periodic->new(
+    interval => 1,
+    on_tick  => sub {
+        $timer->adopt_future(
+            $p->ping($loop, 'myrealbox.com')
+                ->on_done(sub { say "good job the host is running!" })
+                ->on_fail(sub { say "the host is down!!!" })
+                ->else_done
+        );
+    },
+ );
+ $timer->start;
+
+ $l->add( $timer );
+ $l->run;
+
 =head1 DESCRIPTION
 
 This module's goal is to eventually be able to test remote hosts
 on a network with a number of different socket types and protocols.
-Currently it only supports TCP, but UDP, ICMP, and Syn are planned.
+Currently it only supports TCP and ICMP, but UDP, and Syn are planned.
 If you need one of those feel free to work up a patch.
 
 This module was originally forked off of L<Net::Ping>, so it shares B<some> of it's interface, but only where it makes sense.
@@ -73,11 +91,10 @@ This module was originally forked off of L<Net::Ping>, so it shares B<some> of i
  );
 
 All arguments to new are optional, but if you want to provide one in the
-middle you must provide all the ones to the left of it.  The default (and
-currently only) protocol is C<tcp>.  The default timeout is 5 seconds.
-bytes does not apply to C<tcp>.  C<device> is what host to bind the
-socket to, ie what to ping B<from>.  Neither tos nor ttl apply to C<tcp>
-currently.
+middle you must provide all the ones to the left of it.  The default
+protocol is C<tcp>.  The default timeout is 5 seconds.
+C<device> is what host to bind the socket to, ie what to ping B<from>.
+C<bytes>, C<tos> and C<ttl> do not currently apply.
 
 Alternately, you can use a new constructor:
 
@@ -86,20 +103,20 @@ Alternately, you can use a new constructor:
       default_timeout => 10,
       bind            => '192.168.1.1',
       port_number     => 80,
-      service_check   => 1,
    },
  );
 
-All of the above arguments are optional.  Service check, which is off
-by default, will cause ping to fail if the host refuses connection to
-the selected port (7 by default.)  Bind is the same as device from before.
+All of the above arguments are optional. Bind is the same as device from
+before.
+
+See L<Net::Async::Ping::TCP> and L<Net::Async::Ping::ICMP> for module specific
+options.
+
 =method ping
 
  my $future = $p->ping($loop, $host, $timeout);
 
 Returns a L<Future> representing the ping.  C<loop> should be an L<IO::Async::Loop>, host is the host, and timeout is optional and defaults to the default set above.
 
-The future will always terminate with the hi resolution time it took to
-check for liveness.  The success or failure is checked by introspecting
-the future itself.
-
+The return value of the future depends on the protocol. See
+L<Net::Async::Ping::TCP> and L<Net::Async::Ping::ICMP>.

@@ -211,6 +211,8 @@ only when the group is stipulated in C</proc/sys/net/ipv4/ping_group_range>.
 Failing that, the module will send standard RAW packets, which will fail if
 attempted from a non-privileged account.
 
+=head2 Additional options
+
 To disable the attempt to send from a ping socket, set C<use_ping_socket> to
 0 when initiating the object:
 
@@ -242,16 +244,4 @@ An error was received from L<IO::Async::Socket>.
 
 =back
 
-=head1 AUTHOR
-
-Andy Beverley <andy@andybev.com>
-
-=head1 COPYRIGHT AND LICENSE
-
-This software is copyright (c) 2016 by Arthur Axel "fREW" Schmidt and Andy Beverley.
-
-This is free software; you can redistribute it and/or modify it under
-the same terms as the Perl 5 programming language system itself.
-
 =cut
-
