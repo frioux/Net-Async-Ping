@@ -23,7 +23,7 @@ sub new {
 
    my @args;
    if (ref $_[0]) {
-      @args = ($_[0])
+      @args = (%{$_[0]})
    } else {
       my ($default_timeout, $bytes, $device, $tos, $ttl) = @_;
 
