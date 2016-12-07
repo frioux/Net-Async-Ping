@@ -1,12 +1,14 @@
 use strict;
 use warnings;
 
-use Test::More tests => 32;
+use Test::More;
 
 use Net::Async::Ping;
 use IO::Async::Loop;
 
 use Test::Fatal;
+
+my $expected = 0; # Expected number of tests, adjusted as we go
 
 foreach my $type (qw/tcp icmp icmp_ps/) # Normal ICMP and ICMP with ping socket
 {
@@ -16,29 +18,28 @@ foreach my $type (qw/tcp icmp icmp_ps/) # Normal ICMP and ICMP with ping socket
         # see whether it actually is with a call to the external ping command.
         # We do this now, so we know how many tests we need to skip.
         my $unreach         = '192.168.0.197';
-        my $return          = qx(ping -c 1 $unreach);
+        my $return          = qx(ping -c 1 $unreach) || '';
         my $has_unreachable = $return =~ /Destination Host Unreachable/;
 
         my %options;
         if ($type eq 'icmp') {
             my $skip = $has_unreachable ? 12 : 10;
-            skip "Not running as root: skipping ICMP raw socket pings", $skip if $>;
+            skip "Not running as root: skipping ICMP raw socket pings", 0 if $>;
             %options = (use_ping_socket => 0);
         }
         elsif ($type eq 'icmp_ps') {
             # Tricky: try and see if this user can use ping sockets
-            my $skip = 10;
-            skip "Not Linux: skipping ping socket tests", $skip unless $^O =~ /linux/;
+            skip "Not Linux: skipping ping socket tests" unless $^O =~ /linux/;
             my $proc = '/proc/sys/net/ipv4/ping_group_range';
             open(my $fh, '<', $proc)
-                or skip "Cannot open $proc ($!): skipping ping socket tests", $skip;
+                or skip "Cannot open $proc ($!): skipping ping socket tests", 0;
             my $groups = <$fh>;
             defined $groups
-                or skip "/proc/sys/net/ipv4/ping_group_range is empty: skipping ping socket tests", $skip;
+                or skip "/proc/sys/net/ipv4/ping_group_range is empty: skipping ping socket tests", 0;
             $groups =~ /^([0-9]+)\h+([0-9]+)$/
-                or skip "Cannot parse /proc/sys/net/ipv4/ping_group_range: skipping ping socket tests", $skip;
+                or skip "Cannot parse /proc/sys/net/ipv4/ping_group_range: skipping ping socket tests", 0;
             $1 <= $) && $2 >= $)
-                or skip "Current user's group is not allowed to use ping sockets: skipping ping socket tests", $skip;
+                or skip "Current user's group is not allowed to use ping sockets: skipping ping socket tests", 0;
             %options = (use_ping_socket => 1); # default
         }
 
@@ -79,11 +80,12 @@ foreach my $type (qw/tcp icmp icmp_ps/) # Normal ICMP and ICMP with ping socket
             if ($type eq 'icmp') # Unreachable replies do not seem to work with ping sockets
             {
                 SKIP: {
-                    skip "$unreach is not unreachable: skipping unreachable IP address tests", 2 
+                    skip "$unreach is not unreachable: skipping unreachable IP address tests", 0
                         unless $has_unreachable;
                     @params = $legacy ? ($l, $unreach) : ($unreach);
                     my $f = $p->ping(@params, 5); # Longer timeout needed for unreachable packets
                     like exception { $f->get }, qr/ICMP Unreachable/, "type: $type, legacy: $legacy, expected failure";
+                    $expected++;
                 }
             }
 
@@ -101,6 +103,10 @@ foreach my $type (qw/tcp icmp icmp_ps/) # Normal ICMP and ICMP with ping socket
                });
 
             like exception { $f->get }, qr/expected failure/, "type: $type, legacy: $legacy, expected failure";
+            $expected += 5; # 5 tests above, not including unreachable
         }
     }
 }
+
+
+done_testing($expected);
