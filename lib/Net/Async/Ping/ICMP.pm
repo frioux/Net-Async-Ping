@@ -10,7 +10,7 @@ use Carp;
 use Net::Ping;
 use IO::Async::Socket;
 
-use Socket qw( SOCK_RAW SOCK_DGRAM PF_INET NI_NUMERICHOST inet_aton pack_sockaddr_in unpack_sockaddr_in getnameinfo);
+use Socket qw( SOCK_RAW SOCK_DGRAM AF_INET NI_NUMERICHOST inet_aton pack_sockaddr_in unpack_sockaddr_in getnameinfo inet_ntop);
 
 use constant ICMP_ECHOREPLY   => 0; # ICMP packet types
 use constant ICMP_UNREACHABLE => 3; # ICMP packet types
@@ -68,55 +68,59 @@ sub ping {
     # Let's try a ping socket (unprivileged ping) first. See
     # https://lwn.net/Articles/422330/
     my ($ping_socket, $ident);
-    if (socket($fh, PF_INET, SOCK_DGRAM, $proto_num))
+    if (socket($fh, AF_INET, SOCK_DGRAM, $proto_num))
     {
         $ping_socket = 1;
         ($ident) = unpack_sockaddr_in getsockname($fh);
     }
     else {
-        socket($fh, PF_INET, SOCK_RAW, $proto_num) ||
+        socket($fh, AF_INET, SOCK_RAW, $proto_num) ||
             croak("Unable to create ICMP socket ($!). Are you running as root?"
               ." If not, and your system supports ping sockets, try setting"
               ." /proc/sys/net/ipv4/ping_group_range");
         $ident = $self->pid;
     }
 
-    my $ip = inet_aton($host);
-    my $saddr = pack_sockaddr_in(ICMP_PORT, $ip);
+    $loop->resolver->getaddrinfo(
+       host     => $host,
+       protocol => $proto_num,
+       family   => AF_INET,
+    )->then( sub {
 
-    my $f = $loop->new_future;
+        my $saddr = $_[0]->{addr};
+        my $f     = $loop->new_future;
 
-    my $socket = IO::Async::Socket->new(
-        handle => $fh,
-        on_recv_error => sub {
-            my ( $self, $errno ) = @_;
-            $f->fail('Receive error');
-        },
-    );
+        my $socket = IO::Async::Socket->new(
+            handle => $fh,
+            on_recv_error => sub {
+                my ( $self, $errno ) = @_;
+                $f->fail('Receive error');
+            },
+        );
 
-    my $on_recv = $self->_capture_weakself(
-        sub {
-            my ( $ping, $self, $recv_msg, $from_saddr ) = @_;
+        my $on_recv = $self->_capture_weakself(
+            sub {
+                my ( $ping, $self, $recv_msg, $from_saddr ) = @_;
 
-            my $from_pid = -1;
-            my $from_seq = -1;
-            my ($from_port, $from_ip) = unpack_sockaddr_in($from_saddr);
-            my $offset = $ping_socket ? 0 : 20; # No offset needed for ping sockets
-            my ($from_type, $from_subcode) = unpack("C2", substr($recv_msg, $offset, 2));
+                my $from_pid = -1;
+                my $from_seq = -1;
+                my ($from_port, $from_ip) = unpack_sockaddr_in($from_saddr);
+                my $offset = $ping_socket ? 0 : 20; # No offset needed for ping sockets
+                my ($from_type, $from_subcode) = unpack("C2", substr($recv_msg, $offset, 2));
 
-            if ($from_type == ICMP_ECHOREPLY) {
-                ($from_pid, $from_seq) = unpack("n3", substr($recv_msg, $offset + 4, 4))
-                    if length $recv_msg >= $offset + 8;
-            } else {
-                ($from_pid, $from_seq) = unpack("n3", substr($recv_msg, $offset + 32, 4))
-                    if length $recv_msg >= $offset + 36;
-            }
-            # Not needed for ping socket - kernel handles this for us
-            return if !$ping_socket && $from_pid != $ping->ident;
-            return if $from_seq != $ping->seq;
+                if ($from_type == ICMP_ECHOREPLY) {
+                    ($from_pid, $from_seq) = unpack("n3", substr($recv_msg, $offset + 4, 4))
+                        if length $recv_msg >= $offset + 8;
+                } else {
+                    ($from_pid, $from_seq) = unpack("n3", substr($recv_msg, $offset + 32, 4))
+                        if length $recv_msg >= $offset + 36;
+                }
+                # Not needed for ping socket - kernel handles this for us
+                return if !$ping_socket && $from_pid != $ping->ident;
+                return if $from_seq != $ping->seq;
+                my $ip = unpack_sockaddr_in($saddr);
+                return if inet_ntop(AF_INET, $from_ip) ne inet_ntop(AF_INET, $ip); # Does the packet check out?
 
-            my $ip = inet_aton($host);
-            if ( (ntop($from_ip) eq ntop($ip))) { # Does the packet check out?
                 if ($from_type == ICMP_ECHOREPLY) {
                     $f->done;
                 } elsif ($from_type == ICMP_UNREACHABLE) {
@@ -125,31 +129,30 @@ sub ping {
                     $f->fail('ICMP Timeout');
                 }
                 $legacy ? $loop->remove($socket) : $ping->remove_child($socket);
-            }
-        },
-    );
+            },
+        );
 
-    $socket->configure(on_recv => $on_recv);
-    $legacy ? $loop->add($socket) : $self->add_child($socket);
-    $socket->send( $self->_msg($ident), ICMP_FLAGS, $saddr );
+        $socket->configure(on_recv => $on_recv);
+        $legacy ? $loop->add($socket) : $self->add_child($socket);
+        $socket->send( $self->_msg($ident), ICMP_FLAGS, $saddr );
 
-
-    return Future->wait_any(
-       $f,
-       $loop->timeout_future(after => $timeout)
-    )
-    ->then(
-        sub { Future->done(Time::HiRes::tv_interval($t0)) },
-        sub {
-            my ($human, $layer) = @_;
-            my $ex    = pop;
-            if ($layer && $layer eq 'connect') {
-                return Future->done(Time::HiRes::tv_interval($t0))
-                    if !$service_check && $ex == ECONNREFUSED;
-            }
-            Future->fail(Time::HiRes::tv_interval($t0))
-        },
-    )
+        Future->wait_any(
+           $f,
+           $loop->timeout_future(after => $timeout)
+        )
+        ->then(
+            sub { Future->done(Time::HiRes::tv_interval($t0)) },
+            sub {
+                my ($human, $layer) = @_;
+                my $ex    = pop;
+                if ($layer && $layer eq 'connect') {
+                    return Future->done(Time::HiRes::tv_interval($t0))
+                        if !$service_check && $ex == ECONNREFUSED;
+                }
+                Future->fail(Time::HiRes::tv_interval($t0))
+            },
+        )
+    });
 }
 
 sub _msg
@@ -164,25 +167,6 @@ sub _msg
     $msg = pack(ICMP_STRUCT . $data_size, ICMP_ECHO, SUBCODE,
         $checksum, $ident, $self->seq, $data);
     return $msg;
-}
-
-# Copied straight from Net::Ping
-sub ntop {
-    my($ip) = @_;
- 
-    # Vista doesn't define a inet_ntop.  It has InetNtop instead.
-    # Not following ANSI... priceless.  getnameinfo() is defined
-    # for Windows 2000 and later, so that may be the choice.
- 
-    # Any port will work, even undef, but this will work for now.
-    # Socket warns when undef is passed in, but it still works.
-    my $port = getservbyname('echo', 'udp');
-    my $sockaddr = pack_sockaddr_in $port, $ip;
-    my ($error, $address) = getnameinfo($sockaddr, NI_NUMERICHOST);
-    if($error) {
-      croak $error;
-    }
-    return $address;
 }
 
 1;
