@@ -31,8 +31,6 @@ has default_timeout => (
    default => 5,
 );
 
-has service_check => ( is => 'rw' );
-
 has bind => ( is => 'rw' );
 
 has _pid => (
@@ -60,7 +58,7 @@ has use_ping_socket => (
 sub configure_unknown
 {   my $self = shift;
     my %params = @_;
-    delete $params{$_} foreach qw/default_timeout service_check bind seq use_ping_socket/;
+    delete $params{$_} foreach qw/default_timeout bind seq use_ping_socket/;
     return unless keys %params;
     my $class = ref $self;
     croak "Unrecognised configuration keys for $class - " . join( " ", keys %params );
@@ -75,8 +73,6 @@ sub ping {
 
     my ($host, $timeout) = @_;
     $timeout //= $self->default_timeout;
-
-    my $service_check = $self->service_check;
 
     my $t0 = [Time::HiRes::gettimeofday];
 
