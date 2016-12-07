@@ -35,11 +35,11 @@ has service_check => ( is => 'rw' );
 
 has bind => ( is => 'rw' );
 
-has pid => (
+has _pid => (
     is => 'lazy',
 );
 
-sub _build_pid
+sub _build__pid
 {   my $self = shift;
     $$ & 0xffff;
 }
@@ -96,7 +96,7 @@ sub ping {
             croak("Unable to create ICMP socket ($!). Are you running as root?"
               ." If not, and your system supports ping sockets, try setting"
               ." /proc/sys/net/ipv4/ping_group_range");
-        $ident = $self->pid;
+        $ident = $self->_pid;
     }
 
     $loop->resolver->getaddrinfo(
@@ -136,7 +136,7 @@ sub ping {
                 }
 
                 # Not needed for ping socket - kernel handles this for us
-                return if !$ping_socket && $from_pid != $ping->pid;
+                return if !$ping_socket && $from_pid != $ping->_pid;
                 return if $from_seq != $ping->seq;
                 if ($from_type == ICMP_ECHOREPLY) {
                     my $ip = unpack_sockaddr_in($saddr);
