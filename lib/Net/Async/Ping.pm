@@ -9,7 +9,8 @@ use Module::Runtime 'use_module';
 use namespace::clean;
 
 my %method_map = (
-   tcp => 'TCP',
+   tcp  => 'TCP',
+   icmp => 'ICMP',
 );
 
 sub new {
