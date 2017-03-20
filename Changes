@@ -1,6 +1,8 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+
+0.002000  2017-03-19 20:55:36-07:00 America/Los_Angeles
  - Add ICMP support
    (Thanks Andy Beverley!)
    (Fixes GH#2, GH#3, and GH#4)
