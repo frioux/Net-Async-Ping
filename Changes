@@ -4,6 +4,7 @@ Revision history for {{$dist->name}}
  - Add ICMP support
    (Thanks Andy Beverley!)
    (Fixes GH#2, GH#3, and GH#4)
+ - Add missing dep (Test::Fatal)
 0.001001  2015-05-30 22:42:04-05:00 America/Chicago
  - Fix warning on (some) failures to ping
  - Improve tests (thanks for the help Jakub Narębski!)
