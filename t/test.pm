@@ -12,6 +12,8 @@ use Test::Fatal;
 
 my $expected = 0; # Expected number of tests, adjusted as we go
 
+my $loop = IO::Async::Loop->new;
+
 sub run_tests
 {
     my ($type) = @_;
@@ -36,10 +38,9 @@ sub run_tests
     {
         my $t = $type eq 'icmp_ps' ? 'icmp' : $type;
         my $p = Net::Async::Ping->new($t => { default_timeout => 1, %options });
-        my $l = IO::Async::Loop->new;
-        $l->add($p) if !$legacy;
+        $loop->add($p) if !$legacy;
 
-        my @params = $legacy ? ($l, 'localhost') : ('localhost');
+        my @params = $legacy ? ($loop, 'localhost') : ('localhost');
         $p->ping(@params)
            ->then(sub {
               pass "type: $type, legacy: $legacy, pinged localhost!";
@@ -52,7 +53,7 @@ sub run_tests
            })->get;
 
         # http://en.wikipedia.org/wiki/Reserved_IP_addresses
-        @params = $legacy ? ($l, '192.0.2.0') : ('192.0.2.0');
+        @params = $legacy ? ($loop, '192.0.2.0') : ('192.0.2.0');
         my $f = $p->ping(@params)
            ->then(sub {
               fail qq(type: $type, legacy: $legacy, couldn't reach 192.0.2.0);
@@ -70,7 +71,7 @@ sub run_tests
             SKIP: {
                 ++$expected && skip "$unreach is not unreachable: skipping unreachable IP address tests"
                     unless $has_unreachable;
-                @params = $legacy ? ($l, $unreach) : ($unreach);
+                @params = $legacy ? ($loop, $unreach) : ($unreach);
                 my $f = $p->ping(@params, 5); # Longer timeout needed for unreachable packets
                 like exception { $f->get }, qr/ICMP Unreachable/, "type: $type, legacy: $legacy, expected failure";
                 $expected++;
@@ -78,7 +79,7 @@ sub run_tests
         }
 
         # RFC6761, invalid domain to check resolver failure
-        @params = $legacy ? ($l, 'nothing.invalid') : ('nothing.invalid');
+        @params = $legacy ? ($loop, 'nothing.invalid') : ('nothing.invalid');
         $f = $p->ping(@params)
            ->then(sub {
               fail qq(type: $type, legacy: $legacy, couldn't reach nothing.invalid);
@@ -92,6 +93,8 @@ sub run_tests
 
         like exception { $f->get }, qr/expected failure/, "type: $type, legacy: $legacy, expected failure";
         $expected += 5; # 5 tests above, not including unreachable
+
+        $loop->remove($p) if !$legacy;
     }
 
     done_testing($expected);
