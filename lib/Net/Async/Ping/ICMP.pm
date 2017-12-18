@@ -151,7 +151,6 @@ sub ping {
                 } elsif ($from_type == ICMP_TIME_EXCEEDED) {
                     $f->fail('ICMP Timeout');
                 }
-                $legacy ? $loop->remove($self) : $ping->remove_child($self);
             },
         );
 
@@ -163,9 +162,14 @@ sub ping {
            $f,
            $loop->timeout_future(after => $timeout)
         )
-        ->then(
-            sub { Future->done(Time::HiRes::tv_interval($t0)) }
-        )
+        ->then( sub {
+            Future->done(Time::HiRes::tv_interval($t0))
+        })
+        ->followed_by( sub {
+            my $f = shift;
+            $socket->remove_from_parent;
+            $f;
+        })
     });
 }
 
