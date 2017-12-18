@@ -151,7 +151,7 @@ sub ping {
                 } elsif ($from_type == ICMP_TIME_EXCEEDED) {
                     $f->fail('ICMP Timeout');
                 }
-                $legacy ? $loop->remove($socket) : $ping->remove_child($socket);
+                $legacy ? $loop->remove($self) : $ping->remove_child($self);
             },
         );
 
