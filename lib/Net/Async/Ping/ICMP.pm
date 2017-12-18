@@ -83,13 +83,13 @@ sub ping {
     # Let's try a ping socket (unprivileged ping) first. See
     # https://lwn.net/Articles/422330/
     my ($ping_socket, $ident);
-    if ($self->use_ping_socket && socket($fh, AF_INET, SOCK_DGRAM, $proto_num))
+    if ($self->use_ping_socket && $fh->socket(AF_INET, SOCK_DGRAM, $proto_num))
     {
         $ping_socket = 1;
         ($ident) = unpack_sockaddr_in getsockname($fh);
     }
     else {
-        socket($fh, AF_INET, SOCK_RAW, $proto_num) ||
+        $fh->socket(AF_INET, SOCK_RAW, $proto_num) ||
             croak("Unable to create ICMP socket ($!). Are you running as root?"
               ." If not, and your system supports ping sockets, try setting"
               ." /proc/sys/net/ipv4/ping_group_range");
