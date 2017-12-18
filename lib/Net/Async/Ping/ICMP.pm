@@ -9,6 +9,7 @@ use Time::HiRes;
 use Carp;
 use Net::Ping;
 use IO::Async::Socket;
+use Scalar::Util qw/blessed/;
 
 use Socket qw( SOCK_RAW SOCK_DGRAM AF_INET NI_NUMERICHOST inet_aton pack_sockaddr_in unpack_sockaddr_in getnameinfo inet_ntop);
 
@@ -68,7 +69,7 @@ sub configure_unknown
 sub ping {
     my $self = shift;
     # Maintain compat with old API
-    my $legacy = ref $_[0] eq 'IO::Async::Loop::Poll';
+    my $legacy = blessed $_[0] and $_[0]->isa('IO::Async::Loop');
     my $loop   = $legacy ? shift : $self->loop;
 
     my ($host, $timeout) = @_;

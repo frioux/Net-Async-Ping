@@ -7,6 +7,7 @@ use Carp qw/croak/;
 use Future;
 use POSIX 'ECONNREFUSED';
 use Time::HiRes;
+use Scalar::Util qw/blessed/;
 
 extends 'IO::Async::Notifier';
 
@@ -40,7 +41,7 @@ sub configure_unknown
 sub ping {
     my $self = shift;
     # Maintain compat with old API
-    my $legacy = ref $_[0] eq 'IO::Async::Loop::Poll';
+    my $legacy = blessed $_[0] and $_[0]->isa('IO::Async::Loop');
     my $loop   = $legacy ? shift : $self->loop;
 
    my ($host, $timeout) = @_;
