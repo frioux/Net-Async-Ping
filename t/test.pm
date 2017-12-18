@@ -1,3 +1,5 @@
+package t::test;
+
 use strict;
 use warnings;
 
@@ -10,8 +12,10 @@ use Test::Fatal;
 
 my $expected = 0; # Expected number of tests, adjusted as we go
 
-foreach my $type (qw/tcp icmp icmp_ps/) # Normal ICMP and ICMP with ping socket
+sub run_tests
 {
+    my ($type) = @_;
+
     SKIP: {
 
         # Horribly hacky. We guess what might be an unreachable address, and
@@ -107,7 +111,9 @@ foreach my $type (qw/tcp icmp icmp_ps/) # Normal ICMP and ICMP with ping socket
             $expected += 5; # 5 tests above, not including unreachable
         }
     }
+
+    done_testing($expected);
 }
 
 
-done_testing($expected);
+1;
