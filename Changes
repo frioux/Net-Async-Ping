@@ -4,6 +4,7 @@ Revision history for {{$dist->name}}
   - Add ICMPv6 support
     (Thanks Alexander Hartmaier!)
   - Run ICMP socket tests when any of the users groups is allowed
+  - Fix wrong version in Net::Async::Ping::ICMP
 
 0.002001  2018-01-01 10:58:45-08:00 America/Los_Angeles
  - Various cleanups and a memory leak fix

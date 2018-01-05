@@ -1,5 +1,5 @@
 package Net::Async::Ping::ICMP;
-$Net::Async::Ping::ICMP::VERSION = '0.001001';
+
 use Moo;
 use warnings NONFATAL => 'all';
 
@@ -198,10 +198,6 @@ __END__
 =head1 NAME
 
 Net::Async::Ping::ICMP
-
-=head1 VERSION
-
-version 0.001001
 
 =head1 DESCRIPTION
 

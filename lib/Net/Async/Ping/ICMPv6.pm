@@ -1,5 +1,5 @@
 package Net::Async::Ping::ICMPv6;
-$Net::Async::Ping::ICMPv6::VERSION = '0.002001';
+
 use Moo;
 use warnings NONFATAL => 'all';
 
@@ -220,10 +220,6 @@ __END__
 =head1 NAME
 
 Net::Async::Ping::ICMPv6
-
-=head1 VERSION
-
-version 0.002001
 
 =head1 DESCRIPTION
 
