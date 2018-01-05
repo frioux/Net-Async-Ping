@@ -26,17 +26,21 @@ sub run_tests
     my $has_unreachable = $return =~ /Destination Host Unreachable/;
 
     my %options;
-    if ($type eq 'icmp') {
+    if ($type eq 'icmp' || $type eq 'icmpv6') {
         %options = (use_ping_socket => 0);
     }
-    elsif ($type eq 'icmp_ps') {
+    elsif ($type eq 'icmp_ps' || $type eq 'icmpv6_ps') {
         %options = (use_ping_socket => 1); # default
     }
 
     # Test old and new API (with and without $loop)
     foreach my $legacy (0..1)
     {
-        my $t = $type eq 'icmp_ps' ? 'icmp' : $type;
+        my $t = $type;
+        $t = 'icmp'
+            if $type eq 'icmp_ps';
+        $t = 'icmpv6'
+            if $type eq 'icmpv6_ps';
         my $p = Net::Async::Ping->new($t => { default_timeout => 1, %options });
         $loop->add($p) if !$legacy;
 
@@ -67,14 +71,14 @@ sub run_tests
            });
         like exception { $f->get }, qr/expected failure/, 'expected failure';
 
-        if ($type eq 'icmp') # Unreachable replies do not seem to work with ping sockets
+        if ($type eq 'icmp' || $type eq 'icmpv6') # Unreachable replies do not seem to work with ping sockets
         {
             SKIP: {
                 ++$expected && skip "$unreach is not unreachable: skipping unreachable IP address tests"
                     unless $has_unreachable;
                 @params = $legacy ? ($loop, $unreach) : ($unreach);
                 my $f = $p->ping(@params, 5); # Longer timeout needed for unreachable packets
-                like exception { $f->get }, qr/ICMP Unreachable/, "type: $type, legacy: $legacy, expected failure";
+                like exception { $f->get }, qr/ICMP(v6)? Unreachable/, "type: $type, legacy: $legacy, expected failure";
                 $expected++;
             }
         }
