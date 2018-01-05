@@ -77,7 +77,7 @@ sub ping {
     my $t0 = [Time::HiRes::gettimeofday];
 
     my $fh = IO::Socket->new;
-    my $proto_num = (getprotobyname('ipv6-icmp'))[2] ||
+    my $proto_num = getprotobyname('ipv6-icmp') ||
         croak("Can't get ipv6-icmp protocol by name");
     # Let's try a ping socket (unprivileged ping) first. See
     # https://github.com/torvalds/linux/commit/6d0bfe22611602f36617bc7aa2ffa1bbb2f54c67
