@@ -5,7 +5,7 @@ use warnings NONFATAL => 'all';
 
 use Future;
 use Time::HiRes;
-use Carp;
+use Carp qw( croak );
 use IO::Socket;
 use IO::Async::Socket;
 use Scalar::Util qw( blessed );
