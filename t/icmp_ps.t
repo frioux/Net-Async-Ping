@@ -18,7 +18,15 @@ defined $groups
     or plan skip_all => "/proc/sys/net/ipv4/ping_group_range is empty: skipping ping socket tests";
 $groups =~ /^([0-9]+)\h+([0-9]+)$/
     or plan skip_all => "Cannot parse /proc/sys/net/ipv4/ping_group_range: skipping ping socket tests";
-$1 <= $) && $2 >= $)
+my @gids = split / /, $);
+my $user_in_ping_group;
+for my $gid (@gids) {
+    if ($1 <= $gid && $2 >= $gid) {
+        $user_in_ping_group = 1;
+        last;
+    }
+}
+$user_in_ping_group
     or plan skip_all => "Current user's group is not allowed to use ping sockets: skipping ping socket tests";
 
 t::test::run_tests('icmp_ps', {
