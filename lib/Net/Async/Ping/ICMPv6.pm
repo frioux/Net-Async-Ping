@@ -92,6 +92,9 @@ sub ping {
             croak("Unable to create ICMPv6 socket ($!). Are you running as root?"
               ." If not, and your system supports ping sockets, try setting"
               ." /proc/sys/net/ipv4/ping_group_range");
+        #TODO: IPv6 sockets support filtering, should we?
+        #$fh->setsockopt($proto_num, 1, NF_ICMPv6_TYPE_ECHO_REQUEST);
+        #print "SOCKOPT: '" . $fh->getsockopt($proto_num, 1) . "'\n";
         $ident = $self->_pid;
     }
 
