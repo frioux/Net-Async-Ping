@@ -16,12 +16,12 @@ my $loop = IO::Async::Loop->new;
 
 sub run_tests
 {
-    my ($type) = @_;
+    my ($type, $params) = @_;
 
     # Horribly hacky. We guess what might be an unreachable address, and
     # see whether it actually is with a call to the external ping command.
     # We do this now, so we know how many tests we need to skip.
-    my $unreach         = '192.168.0.197';
+    my $unreach         = $params->{unreachable};
     my $return          = qx(ping -c 1 $unreach) || '';
     my $has_unreachable = $return =~ /Destination Host Unreachable/;
 
@@ -53,14 +53,15 @@ sub run_tests
            })->get;
 
         # http://en.wikipedia.org/wiki/Reserved_IP_addresses
-        @params = $legacy ? ($loop, '192.0.2.0') : ('192.0.2.0');
+        my $reserved = $params->{reserved};
+        @params = $legacy ? ($loop, $reserved) : ($reserved);
         my $f = $p->ping(@params)
            ->then(sub {
-              fail qq(type: $type, legacy: $legacy, couldn't reach 192.0.2.0);
+              fail qq(type: $type, legacy: $legacy, couldn't reach $reserved);
               note("success future: @_");
               Future->done
            })->else(sub {
-              pass qq(type: $type, legacy: $legacy, couldn't reach 192.0.2.0);
+              pass qq(type: $type, legacy: $legacy, couldn't reach $reserved);
               note("failure future: @_");
               Future->fail('expected failure')
            });

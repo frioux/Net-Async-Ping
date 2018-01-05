@@ -21,4 +21,7 @@ $groups =~ /^([0-9]+)\h+([0-9]+)$/
 $1 <= $) && $2 >= $)
     or plan skip_all => "Current user's group is not allowed to use ping sockets: skipping ping socket tests";
 
-t::test::run_tests('icmp_ps');
+t::test::run_tests('icmp_ps', {
+    unreachable => '192.168.0.197',
+    reserved    => '192.0.2.0',
+});
