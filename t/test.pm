@@ -22,7 +22,10 @@ sub run_tests
     # see whether it actually is with a call to the external ping command.
     # We do this now, so we know how many tests we need to skip.
     my $unreach         = $params->{unreachable};
-    my $return          = qx(ping -c 1 $unreach) || '';
+    my $ping_command   = $type eq 'icmpv6' || $type eq 'icmpv6_ps'
+        ? 'ping6'
+        : 'ping';
+    my $return          = qx($ping_command -c 1 $unreach) || '';
     my $has_unreachable = $return =~ /Destination Host Unreachable/;
 
     my %options;
