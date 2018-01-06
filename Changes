@@ -1,6 +1,8 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+
+0.003000  2018-01-06 10:00:12-08:00 America/Los_Angeles
   - Add ICMPv6 support
     (Thanks Alexander Hartmaier!)
   - Run ICMP socket tests when any of the users groups is allowed
