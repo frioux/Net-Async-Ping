@@ -10,7 +10,7 @@ use IO::Socket;
 use IO::Async::Socket;
 use Scalar::Util qw( blessed );
 use Socket qw(
-    SOCK_RAW SOCK_DGRAM AF_INET6
+    SOCK_RAW SOCK_DGRAM AF_INET6 IPPROTO_ICMPV6
     inet_pton pack_sockaddr_in6 unpack_sockaddr_in6 inet_ntop
 );
 use Net::Frame::Layer::ICMPv6 qw( :consts );
@@ -77,18 +77,16 @@ sub ping {
     my $t0 = [Time::HiRes::gettimeofday];
 
     my $fh = IO::Socket->new;
-    my $proto_num = getprotobyname('ipv6-icmp') ||
-        croak("Can't get ipv6-icmp protocol by name");
     # Let's try a ping socket (unprivileged ping) first. See
     # https://github.com/torvalds/linux/commit/6d0bfe22611602f36617bc7aa2ffa1bbb2f54c67
     my ($ping_socket, $ident);
     if ( $self->use_ping_socket
-         && $fh->socket(AF_INET6, SOCK_DGRAM, $proto_num) ) {
+         && $fh->socket(AF_INET6, SOCK_DGRAM, IPPROTO_ICMPV6) ) {
         $ping_socket = 1;
         ($ident) = unpack_sockaddr_in6 getsockname($fh);
     }
     else {
-        $fh->socket(AF_INET6, SOCK_RAW, $proto_num) ||
+        $fh->socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6) ||
             croak("Unable to create ICMPv6 socket ($!). Are you running as root?"
               ." If not, and your system supports ping sockets, try setting"
               ." /proc/sys/net/ipv4/ping_group_range");
@@ -106,7 +104,7 @@ sub ping {
 
     $loop->resolver->getaddrinfo(
        host     => $host,
-       protocol => $proto_num,
+       protocol => IPPROTO_ICMPV6,
        family   => AF_INET6,
     )->then( sub {
         my $saddr = $_[0]->{addr};
