@@ -1,6 +1,8 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+
+0.003001  2018-01-10 16:01:34+01:00 Europe/Vienna
   - use ICMP and ICMPv6 protocol constants from Socket
     instead of a getprotobyname lookup per ping
 
