@@ -1,7 +1,7 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
-  - fix processing of unrelated ICMP error packets
+  - fix processing of unrelated ICMP and ICMPv6 error packets
     by validating the source IP, identifier and sequence number
 
 0.003001  2018-01-10 16:01:34+01:00 Europe/Vienna
