@@ -128,11 +128,25 @@ sub ping {
                 my $from_pid = -1;
                 my $from_seq = -1;
 
-		my $frame = Net::Frame::Simple->new(
-                    raw        => $recv_msg,
-                    firstLayer => 'ICMPv4',
-                );
-                my @layers = $frame->layers;
+                my @layers;
+                # ping sockets only return the ICMP packet
+                if ($ping_socket) {
+                   my $frame = Net::Frame::Simple->new(
+                        raw        => $recv_msg,
+                        firstLayer => 'ICMPv4',
+                    );
+                    @layers = $frame->layers;
+                }
+                # raw sockets return the IPv4 packet containing the ICMP payload
+                else {
+                   my $frame = Net::Frame::Simple->new(
+                        raw        => $recv_msg,
+                        firstLayer => 'IPv4',
+                    );
+                    @layers = $frame->layers;
+                    # discard the IPv4 layer
+                    shift @layers;
+                }
                 my $icmpv4 = $layers[0];
                 my $icmpv4_payload = $layers[1];
 

@@ -1,6 +1,8 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+  - fix parsing of ICMP responses when using raw socket
+    also when falling back from ping socket to raw
 
 0.003002  2018-01-17 14:01:58+01:00 Europe/Vienna
   - fix processing of unrelated ICMP and ICMPv6 error packets
