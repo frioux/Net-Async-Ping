@@ -104,7 +104,6 @@ sub ping {
        protocol => IPPROTO_ICMP,
        family   => AF_INET,
     )->then( sub {
-
         my $saddr  = $_[0]->{addr};
         my ($err, $dst_ip) = getnameinfo($saddr, NI_NUMERICHOST,
             NIx_NOSERV);
@@ -209,13 +208,14 @@ sub _msg {
     my $icmpv4 = Net::Frame::Layer::ICMPv4->new(
         type     => NF_ICMPv4_TYPE_ECHO_REQUEST,
         code     => NF_ICMPv4_CODE_ZERO,
-        #checksum => 0,
-        #payload  => $echo->pack,
+        payload  => $echo->pack,
     );
 
     # FIXME: use Net::Frame::Simple after RT124015 is fixed
     #my $echoReq = Net::Frame::Simple->new(layers => [ $icmpv4, $echo ]);
     #return $echoReq->pack;
+    $icmpv4->computeLengths;
+    $icmpv4->computeChecksums([$echo]);
     return $icmpv4->pack . $echo->pack;
 }
 

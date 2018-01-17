@@ -3,6 +3,7 @@ Revision history for {{$dist->name}}
 {{$NEXT}}
   - fix processing of unrelated ICMP and ICMPv6 error packets
     by validating the source IP, identifier and sequence number
+  - fix incorrect ICMP checksum when using raw socket
 
 0.003001  2018-01-10 16:01:34+01:00 Europe/Vienna
   - use ICMP and ICMPv6 protocol constants from Socket
