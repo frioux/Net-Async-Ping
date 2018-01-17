@@ -1,6 +1,8 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+
+0.003002  2018-01-17 14:01:58+01:00 Europe/Vienna
   - fix processing of unrelated ICMP and ICMPv6 error packets
     by validating the source IP, identifier and sequence number
   - fix incorrect ICMP checksum when using raw socket
