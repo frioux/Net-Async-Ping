@@ -96,10 +96,8 @@ sub ping {
         $ident = $self->_pid;
     }
 
-    if ($self->bind)
-    {
-        my $bind = pack_sockaddr_in 0, inet_aton $self->bind;
-        bind $fh, $bind
+    if ($self->bind) {
+        $fh->bind(pack_sockaddr_in 0, inet_aton $self->bind)
             or croak "Failed to bind to ".$self->bind;
     }
 
