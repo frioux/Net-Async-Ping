@@ -244,8 +244,27 @@ This module will first attempt to use a ping socket to send its ICMPv6 packets,
 which does not need root privileges. These are only supported on Linux, and
 only when the group is stipulated in C</proc/sys/net/ipv4/ping_group_range>
 (yes, the IPv4 setting also controls the IPv6 socket).
-Failing that, the module will send standard RAW packets, which will fail if
-attempted from a non-privileged account.
+Failing that, the module will use a raw socket limited to the ICMPv6 protocol,
+which will fail if attempted from a non-privileged account.
+
+=head3 ping socket advantages
+
+=over
+
+=item doesn't require root/admin privileges
+
+=item better performance, as the kernel is handling the reply to request
+packet matching
+
+=back
+
+=head3 raw socket advantages
+
+=over
+
+=item supports echo replies, no icmp error messages
+
+=back
 
 =head2 Additional options
 
