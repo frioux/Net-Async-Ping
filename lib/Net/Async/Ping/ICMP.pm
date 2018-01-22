@@ -172,6 +172,12 @@ sub ping {
                     $from_pid = $icmpv4_echo->identifier;
                     $from_seq = $icmpv4_echo->sequenceNumber;
                 }
+                # no packet we care about, raw sockets receive broadcasts,
+                # multicasts etc, ours is only limited to IPv4 containing ICMP
+                else {
+                    return;
+                }
+
 
                 # ignore received packets which are not a response to one of
                 # our echo requests
