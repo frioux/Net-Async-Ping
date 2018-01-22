@@ -123,8 +123,8 @@ sub ping {
 
         my $on_recv = $self->_capture_weakself(
             sub {
-                my $ping = shift or return; # weakref, may have disappeared
-                my ( $self, $recv_msg, $from_saddr ) = @_;
+                my $self = shift or return; # weakref, may have disappeared
+                my ( undef, $recv_msg, $from_saddr ) = @_;
 
                 my $from_ip  = -1;
                 my $from_pid = -1;
@@ -182,7 +182,7 @@ sub ping {
                     unless $from_ip eq $dst_ip
                 # Not needed for ping socket - kernel handles this for us
                         && ( $ping_socket || $from_pid == $ident )
-                        && $from_seq == $ping->seq;
+                        && $from_seq == $self->seq;
 
                 if ($from_type == ICMP_ECHOREPLY) {
                     $f->done;
