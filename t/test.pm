@@ -81,7 +81,7 @@ sub run_tests
                     unless $has_unreachable;
                 @params = $legacy ? ($loop, $unreach) : ($unreach);
                 my $f = $p->ping(@params, 5); # Longer timeout needed for unreachable packets
-                like exception { $f->get }, qr/ICMP(v6)? Unreachable/, "type: $type, legacy: $legacy, expected failure";
+                like exception { $f->get }, qr/ICMP(v6)? Unreachable/, "type: $type, legacy: $legacy, unreachable expected failure";
                 $expected++;
             }
         }
