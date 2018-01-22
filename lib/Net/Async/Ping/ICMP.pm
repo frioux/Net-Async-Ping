@@ -178,7 +178,7 @@ sub ping {
                 return
                     unless $from_ip eq $dst_ip
                 # Not needed for ping socket - kernel handles this for us
-                        && ( $ping_socket || $from_pid == $ping->_pid )
+                        && ( $ping_socket || $from_pid == $ident )
                         && $from_seq == $ping->seq;
 
 		if ( $icmpv4->type == NF_ICMPv4_TYPE_ECHO_REPLY ) {
