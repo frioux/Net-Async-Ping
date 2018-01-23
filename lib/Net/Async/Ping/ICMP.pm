@@ -36,6 +36,73 @@ has default_timeout => (
 
 has bind => ( is => 'rw' );
 
+has _is_raw_socket_setup_done => (
+    is => 'rw',
+    default => 0,
+);
+
+has _raw_socket => (
+    is => 'lazy',
+);
+
+sub _build__raw_socket {
+    my $self = shift;
+
+    my $fh = IO::Socket->new;
+    $fh->socket(AF_INET, SOCK_RAW, IPPROTO_ICMP) ||
+        croak("Unable to create raw socket ($!). Are you running as root?"
+            ." If not, and your system supports ping sockets, try setting"
+            ." /proc/sys/net/ipv4/ping_group_range");
+
+    if ($self->bind) {
+        $fh->bind(pack_sockaddr_in 0, inet_aton $self->bind)
+            or croak "Failed to bind to ".$self->bind;
+    }
+
+    my $on_recv = $self->_capture_weakself(sub {
+        my $self = shift or return; # weakref, may have disappeared
+        my ( $ioasock, $recv_msg, $from_saddr ) = @_;
+
+        my $from_data = $self->_parse_icmp_packet($recv_msg, $from_saddr, 20);
+        return
+            unless defined $from_data && ref $from_data eq 'HASH';
+
+        # ignore received packets which are not a response to one of
+        # our echo requests
+        my $f = $self->_raw_socket_queue->{$from_data->{ip}};
+        return
+            unless defined $f
+                && $from_data->{id} == $self->_pid
+                && $from_data->{seq} == $self->seq;
+
+        if ($from_data->{type} == ICMP_ECHOREPLY) {
+            $f->done;
+        }
+        elsif ($from_data->{type} == ICMP_UNREACHABLE) {
+            $f->fail('ICMP Unreachable');
+        }
+        elsif ($from_data->{type} == ICMP_TIME_EXCEEDED) {
+            $f->fail('ICMP Timeout');
+        }
+    });
+
+    my $socket = IO::Async::Socket->new(
+        handle => $fh,
+        on_recv_error => sub {
+            my ( $self, $errno ) = @_;
+            warn "Receive error: $errno";
+        },
+        on_recv => $on_recv,
+    );
+
+    return $socket;
+}
+
+has _raw_socket_queue => (
+    is => 'rw',
+    default => sub { {} },
+);
+
 has _pid => (
     is => 'lazy',
 );
@@ -56,6 +123,68 @@ has use_ping_socket => (
     is      => 'ro',
     default => 1,
 );
+
+sub _parse_icmp_packet {
+    my ( $self, $recv_msg, $from_saddr, $offset ) = @_;
+    $offset = 0
+        unless defined $offset;
+
+    my $from_ip  = -1;
+    my $from_pid = -1;
+    my $from_seq = -1;
+
+    # ping sockets only return the ICMP packet
+    # raw sockets return the IPv4 packet containing the ICMP
+    # packet
+    my ($from_type, $from_subcode) =
+        unpack("C2", substr($recv_msg, $offset, 2));
+
+    # extract source ip, identifier and sequence depending on
+    # packet type
+    if ($from_type == ICMP_ECHOREPLY) {
+        (my $err, $from_ip) = getnameinfo($from_saddr,
+            NI_NUMERICHOST, NIx_NOSERV);
+        croak "getnameinfo: $err"
+            if $err;
+        ($from_pid, $from_seq) =
+            unpack("n2", substr($recv_msg, $offset + 4, 4))
+            if length $recv_msg >= $offset + 8;
+    }
+    # an ICMPv4 error message includes the original header
+    # IPv4 + ICMPv4 + ICMPv4::Echo
+    elsif ($from_type == ICMP_UNREACHABLE) {
+        my $ipv4 = Net::Frame::Layer::IPv4->new(
+            # 8 byte is the length of the ICMP Destination
+            # unreachable header
+            raw => substr($recv_msg, $offset + 8)
+        );
+        # skip if contained packet isn't an icmp packet
+        return
+            if $ipv4->protocol != NF_IPv4_PROTOCOL_ICMPv4;
+
+        # skip if contained packet isn't an icmp echo request packet
+        my ($to_type, $to_subcode) =
+            unpack("C2", substr($ipv4->payload, 0, 2));
+        return
+            if $to_type != ICMP_ECHO;
+
+        $from_ip = $ipv4->dst;
+        ($from_pid, $from_seq) =
+            unpack("n2", substr($ipv4->payload, 4, 4));
+    }
+    # no packet we care about, raw sockets receive broadcasts,
+    # multicasts etc, ours is only limited to IPv4 containing ICMP
+    else {
+        return;
+    }
+
+    return {
+        type => $from_type,
+        ip => $from_ip,
+        id => $from_pid,
+        seq => $from_seq,
+    };
+}
 
 # Overrides method in IO::Async::Notifier to allow specific options in this class
 sub configure_unknown
@@ -79,125 +208,86 @@ sub ping {
 
     my $t0 = [Time::HiRes::gettimeofday];
 
-    my $fh = IO::Socket->new;
-    # Let's try a ping socket (unprivileged ping) first. See
-    # https://lwn.net/Articles/422330/
-    my ($ping_socket, $ident);
-    if ($self->use_ping_socket
-        && $fh->socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP)) {
-        $ping_socket = 1;
-        ($ident) = unpack_sockaddr_in getsockname($fh);
-    }
-    else {
-        $fh->socket(AF_INET, SOCK_RAW, IPPROTO_ICMP) ||
-            croak("Unable to create ICMP socket ($!). Are you running as root?"
-              ." If not, and your system supports ping sockets, try setting"
-              ." /proc/sys/net/ipv4/ping_group_range");
-        $ident = $self->_pid;
-    }
-
-    if ($self->bind) {
-        $fh->bind(pack_sockaddr_in 0, inet_aton $self->bind)
-            or croak "Failed to bind to ".$self->bind;
-    }
-
     $loop->resolver->getaddrinfo(
        host     => $host,
        protocol => IPPROTO_ICMP,
        family   => AF_INET,
     )->then( sub {
         my $saddr  = $_[0]->{addr};
-        my ($err, $dst_ip) = getnameinfo($saddr, NI_NUMERICHOST,
-            NIx_NOSERV);
+        my ($err, $dst_ip) = getnameinfo($saddr, NI_NUMERICHOST, NIx_NOSERV);
         croak "getnameinfo: $err"
             if $err;
-        my $f      = $loop->new_future;
+        my $f = $loop->new_future;
 
-        my $socket = IO::Async::Socket->new(
-            handle => $fh,
-            on_recv_error => sub {
-                my ( $self, $errno ) = @_;
-                $f->fail('Receive error');
-            },
-        );
+        # Let's try a ping socket (unprivileged ping) first. See
+        # https://lwn.net/Articles/422330/
+        my ($socket, $ping_socket, $ident);
+        if ($self->use_ping_socket) {
+            my $ping_fh = IO::Socket->new;
+            if ($ping_fh->socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP)) {
+                ($ident) = unpack_sockaddr_in getsockname($ping_fh);
 
-        my $on_recv = $self->_capture_weakself(
-            sub {
-                my $self = shift or return; # weakref, may have disappeared
-                my ( undef, $recv_msg, $from_saddr ) = @_;
-
-                my $from_ip  = -1;
-                my $from_pid = -1;
-                my $from_seq = -1;
-
-                # ping sockets only return the ICMP packet
-                # raw sockets return the IPv4 packet containing the ICMP
-                # packet
-                my $offset = $ping_socket ? 0 : 20;
-                my ($from_type, $from_subcode) =
-                    unpack("C2", substr($recv_msg, $offset, 2));
-
-                # extract source ip, identifier and sequence depending on
-                # packet type
-                if ($from_type == ICMP_ECHOREPLY) {
-                    (my $err, $from_ip) = getnameinfo($from_saddr,
-                        NI_NUMERICHOST, NIx_NOSERV);
-                    croak "getnameinfo: $err"
-                        if $err;
-                    ($from_pid, $from_seq) =
-                        unpack("n2", substr($recv_msg, $offset + 4, 4))
-                        if length $recv_msg >= $offset + 8;
-                }
-                # an ICMPv4 error message includes the original header
-                # IPv4 + ICMPv4 + ICMPv4::Echo
-                elsif ($from_type == ICMP_UNREACHABLE) {
-                    my $ipv4 = Net::Frame::Layer::IPv4->new(
-                        # 8 byte is the length of the ICMP Destination
-                        # unreachable header
-                        raw => substr($recv_msg, $offset + 8)
-                    );
-                    # skip if contained packet isn't an icmp packet
-                    return
-                        if $ipv4->protocol != NF_IPv4_PROTOCOL_ICMPv4;
-
-                    # skip if contained packet isn't an icmp echo request packet
-                    my ($to_type, $to_subcode) =
-                        unpack("C2", substr($ipv4->payload, 0, 2));
-                    return
-                        if $to_type != ICMP_ECHO;
-
-                    $from_ip = $ipv4->dst;
-                    ($from_pid, $from_seq) =
-                        unpack("n2", substr($ipv4->payload, 4, 4));
-                }
-                # no packet we care about, raw sockets receive broadcasts,
-                # multicasts etc, ours is only limited to IPv4 containing ICMP
-                else {
-                    return;
+                if ($self->bind) {
+                    $ping_fh->bind(pack_sockaddr_in 0, inet_aton $self->bind)
+                        or croak "Failed to bind to ".$self->bind;
                 }
 
-                # ignore received packets which are not a response to one of
-                # our echo requests
-                return
-                    unless $from_ip eq $dst_ip
-                # Not needed for ping socket - kernel handles this for us
-                        && ( $ping_socket || $from_pid == $ident )
-                        && $from_seq == $self->seq;
+                my $on_recv = $self->_capture_weakself(
+                    sub {
+                        my $self = shift or return; # weakref, may have disappeared
+                        my ( undef, $recv_msg, $from_saddr ) = @_;
 
-                if ($from_type == ICMP_ECHOREPLY) {
-                    $f->done;
-                }
-                elsif ($from_type == ICMP_UNREACHABLE) {
-                    $f->fail('ICMP Unreachable');
-                }
-                elsif ($from_type == ICMP_TIME_EXCEEDED) {
-                    $f->fail('ICMP Timeout');
-                }
-            },
-        );
+                        my $from_data = $self->_parse_icmp_packet($recv_msg,
+                            $from_saddr);
 
-        $socket->configure(on_recv => $on_recv);
-        $legacy ? $loop->add($socket) : $self->add_child($socket);
+                        # ignore received packets which are not a response to one of
+                        # our echo requests
+                        return
+                            unless $from_data->{ip} eq $dst_ip
+                                && $from_data->{seq} == $self->seq;
+
+                        if ($from_data->{type} == ICMP_ECHOREPLY) {
+                            $f->done;
+                        }
+                        elsif ($from_data->{type} == ICMP_UNREACHABLE) {
+                            $f->fail('ICMP Unreachable');
+                        }
+                        elsif ($from_data->{type} == ICMP_TIME_EXCEEDED) {
+                            $f->fail('ICMP Timeout');
+                        }
+                    },
+                );
+
+                $socket = IO::Async::Socket->new(
+                    handle => $ping_fh,
+                    on_recv_error => sub {
+                        my ( $self, $errno ) = @_;
+                        $f->fail('Receive error');
+                    },
+                    on_recv => $on_recv,
+                );
+                $legacy ? $loop->add($socket) : $self->add_child($socket);
+                $ping_socket = 1;
+            }
+        }
+
+        # fallback to raw socket or if no ping socket was requested
+        if (not defined $socket) {
+            $socket = $self->_raw_socket;
+            $ident = $self->_pid;
+            if (!$self->_is_raw_socket_setup_done) {
+                $legacy ? $loop->add($socket) : $self->add_child($socket);
+                $self->_is_raw_socket_setup_done(1);
+            }
+        }
+
+        # remember raw socket requests
+        if (!$ping_socket) {
+            if (exists $self->_raw_socket_queue->{$dst_ip}) {
+                warn "$dst_ip already in raw queue, $host probably duplicate\n";
+            }
+            $self->_raw_socket_queue->{$dst_ip} = $f;
+        }
         $socket->send( $self->_msg($ident), ICMP_FLAGS, $saddr );
 
         Future->wait_any(
@@ -205,12 +295,20 @@ sub ping {
            $loop->timeout_future(after => $timeout)
         )
         ->then( sub {
-            Future->done(Time::HiRes::tv_interval($t0))
+            Future->done(Time::HiRes::tv_interval($t0));
         })
         ->followed_by( sub {
             my $f = shift;
-            $socket->remove_from_parent;
-            $f;
+
+            if ($ping_socket) {
+                $socket->remove_from_parent;
+            }
+            else {
+                # remove from raw socket queue
+                delete $self->_raw_socket_queue->{$dst_ip};
+            }
+
+            return $f;
         })
     });
 }
