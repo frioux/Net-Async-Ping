@@ -6,6 +6,7 @@ use warnings NONFATAL => 'all';
 use Future;
 use Time::HiRes;
 use Carp qw( croak );
+use Net::Ping qw();
 use IO::Socket;
 use IO::Async::Socket;
 use Scalar::Util qw( blessed );
@@ -14,10 +15,12 @@ use Socket qw(
     inet_pton pack_sockaddr_in6 unpack_sockaddr_in6 getnameinfo inet_ntop
 );
 use Net::Frame::Layer::ICMPv6 qw( :consts );
-use Net::Frame::Layer::ICMPv6::Echo;
 use Net::Frame::Simple;
 
-use constant ICMPv6_FLAGS => 0; # No special flags for send or recv
+use constant ICMPv6_ECHO      => 128;
+use constant ICMP_STRUCT      => "C2 n3 A"; # Structure of a minimal ICMP packet
+use constant SUBCODE          => 0; # No ICMP subcode for ECHO and ECHOREPLY
+use constant ICMPv6_FLAGS     => 0; # No special flags for send or recv
 
 extends 'IO::Async::Notifier';
 
@@ -204,21 +207,16 @@ sub ping {
 sub _msg {
     my ($self, $ident) = @_;
 
-    my $echo = Net::Frame::Layer::ICMPv6::Echo->new(
-        identifier     => $ident,
-        sequenceNumber => $self->seq,
-    );
-    my $icmpv6 = Net::Frame::Layer::ICMPv6->new(
-        type     => NF_ICMPv6_TYPE_ECHO_REQUEST,
-        code     => NF_ICMPv6_CODE_ZERO,
-        #checksum => 0,
-        #payload  => $echo->pack,
-    );
-
-    # FIXME: use Net::Frame::Simple after RT124015 is fixed
-    #my $echoReq = Net::Frame::Simple->new(layers => [ $icmpv6, $echo ]);
-    #return $echoReq->pack;
-    return $icmpv6->pack . $echo->pack;
+    # data_size to be implemented later
+    my $data_size = 0;
+    my $data      = '';
+    my $checksum  = 0;
+    my $msg = pack(ICMP_STRUCT . $data_size, ICMPv6_ECHO, SUBCODE,
+        $checksum, $ident, $self->seq, $data);
+    $checksum = Net::Ping->checksum($msg);
+    $msg = pack(ICMP_STRUCT . $data_size, ICMPv6_ECHO, SUBCODE,
+        $checksum, $ident, $self->seq, $data);
+    return $msg;
 }
 
 1;
