@@ -64,7 +64,7 @@ sub _build__raw_socket {
 
     my $on_recv = $self->_capture_weakself(sub {
         my $self = shift or return; # weakref, may have disappeared
-        my ( $ioasock, $recv_msg, $from_saddr ) = @_;
+        my ( undef, $recv_msg, $from_saddr ) = @_;
 
         my $from_data = $self->_parse_icmpv6_packet($recv_msg, $from_saddr);
         return
