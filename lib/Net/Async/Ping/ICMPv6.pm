@@ -14,13 +14,16 @@ use Socket qw(
     SOCK_RAW SOCK_DGRAM AF_INET6 IPPROTO_ICMPV6 NI_NUMERICHOST NIx_NOSERV
     inet_pton pack_sockaddr_in6 unpack_sockaddr_in6 getnameinfo inet_ntop
 );
-use Net::Frame::Layer::ICMPv6 qw( :consts );
-use Net::Frame::Simple;
+use Net::Frame::Layer::IPv6 qw(:consts);
 
-use constant ICMPv6_ECHO      => 128;
-use constant ICMP_STRUCT      => "C2 n3 A"; # Structure of a minimal ICMP packet
-use constant SUBCODE          => 0; # No ICMP subcode for ECHO and ECHOREPLY
-use constant ICMPv6_FLAGS     => 0; # No special flags for send or recv
+use constant ICMPv6_UNREACHABLE => 1;
+use constant ICMPv6_TIMEEXCEED  => 3;
+use constant ICMPv6_ECHO        => 128;
+use constant ICMPv6_ECHOREPLY   => 129;
+use constant ICMP_STRUCT        => "C2 n3 A";   # Structure of a minimal ICMP
+                                                # and ICMPv6 packet
+use constant SUBCODE            => 0; # No ICMP subcode for ECHO and ECHOREPLY
+use constant ICMPv6_FLAGS       => 0; # No special flags for send or recv
 
 extends 'IO::Async::Notifier';
 
@@ -129,40 +132,52 @@ sub ping {
             sub {
                 my $self = shift or return; # weakref, may have disappeared
                 my ( undef, $recv_msg, $from_saddr ) = @_;
+                my $offset = 0;
 
                 my $from_ip  = -1;
                 my $from_pid = -1;
                 my $from_seq = -1;
 
-                my $frame = Net::Frame::Simple->new(
-                    raw        => $recv_msg,
-                    firstLayer => 'ICMPv6',
-                );
-                my @layers = $frame->layers;
-                my $icmpv6 = $layers[0];
-                my $icmpv6_payload = $layers[1];
+                my ($from_type, $from_subcode) =
+                    unpack("C2", substr($recv_msg, $offset, 2));
 
                 # extract source ip, identifier and sequence depending on
                 # packet type
-                if ( $icmpv6->type == NF_ICMPv6_TYPE_ECHO_REPLY ) {
+                if ($from_type == ICMPv6_ECHOREPLY) {
                     (my $err, $from_ip) = getnameinfo($from_saddr,
-                      NI_NUMERICHOST, NIx_NOSERV);
+                        NI_NUMERICHOST, NIx_NOSERV);
                     croak "getnameinfo: $err"
-                        if $err;
-                    $from_pid = $icmpv6_payload->identifier;
-                    $from_seq = $icmpv6_payload->sequenceNumber;
+                    if $err;
+                    ($from_pid, $from_seq) =
+                    unpack("n2", substr($recv_msg, $offset + 4, 4))
+                    if length $recv_msg >= $offset + 8;
                 }
                 # an ICMPv6 error message includes the original header
                 # IPv6 + ICMPv6 + ICMPv6::Echo
-                elsif ( scalar @layers >= 5
-                    && $layers[3]->type == NF_ICMPv6_TYPE_ECHO_REQUEST ) {
-                    my $ipv6 = $layers[2];
-                    my $icmpv6_echo = $layers[4];
+                elsif ($from_type == ICMPv6_UNREACHABLE) {
+                    my $ipv6 = Net::Frame::Layer::IPv6->new(
+                    # 8 byte is the length of the ICMPv6 destination
+                    # unreachable header
+                    raw => substr($recv_msg, $offset + 8)
+                    );
+                    # skip if contained packet isn't an ICMPv6 packet
+                    return
+                    if $ipv6->protocol != NF_IPv6_PROTOCOL_ICMPv6;
 
-                    # the destination IPv6 of our ICMPv6 echo request packet
-                    $from_ip  = $ipv6->dst;
-                    $from_pid = $icmpv6_echo->identifier;
-                    $from_seq = $icmpv6_echo->sequenceNumber;
+                    # skip if contained packet isn't an icmp echo request packet
+                    my ($to_type, $to_subcode) =
+                    unpack("C2", substr($ipv6->payload, 0, 2));
+                    return
+                    if $to_type != ICMPv6_ECHO;
+
+                    $from_ip = $ipv6->dst;
+                    ($from_pid, $from_seq) =
+                    unpack("n2", substr($ipv6->payload, 4, 4));
+                }
+                # no packet we care about, raw sockets receive broadcasts,
+                # multicasts etc, ours is only limited to IPv6 containing ICMPv6
+                else {
+                    return;
                 }
 
                 # ignore received packets which are not a response to one of
@@ -173,13 +188,13 @@ sub ping {
                         && ( $ping_socket || $from_pid == $ident )
                         && $from_seq == $self->seq;
 
-                if ( $icmpv6->type == NF_ICMPv6_TYPE_ECHO_REPLY ) {
+                if ( $from_type == ICMPv6_ECHOREPLY ) {
                     $f->done;
                 }
-                elsif ( $icmpv6->type == NF_ICMPv6_TYPE_DESTUNREACH ) {
+                elsif ( $from_type == ICMPv6_UNREACHABLE ) {
                     $f->fail('ICMPv6 Unreachable');
                 }
-                elsif ( $icmpv6->type == NF_ICMPv6_TYPE_TIMEEXCEED ) {
+                elsif ( $from_type == ICMPv6_TIMEEXCEED ) {
                     $f->fail('ICMPv6 Timeout');
                 }
             }
