@@ -5,11 +5,11 @@ use warnings NONFATAL => 'all';
 
 use Future;
 use Time::HiRes;
-use Carp;
+use Carp qw( croak );
 use Net::Ping qw();
+use IO::Socket;
 use IO::Async::Socket;
 use Scalar::Util qw/blessed/;
-
 use Socket qw(
     SOCK_RAW SOCK_DGRAM AF_INET IPPROTO_ICMP NI_NUMERICHOST NIx_NOSERV
     inet_aton pack_sockaddr_in unpack_sockaddr_in getnameinfo inet_ntop
