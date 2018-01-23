@@ -87,9 +87,13 @@ sub _build__raw_socket {
 
     my $socket = IO::Async::Socket->new(
         handle => $fh,
+        on_send_error => sub {
+            my ( $self, $errno ) = @_;
+            warn "Send error: $errno\n";
+        },
         on_recv_error => sub {
             my ( $self, $errno ) = @_;
-            warn "Receive error: $errno";
+            warn "Receive error: $errno\n";
         },
         on_recv => $on_recv,
     );
@@ -259,9 +263,13 @@ sub ping {
 
                 $socket = IO::Async::Socket->new(
                     handle => $ping_fh,
+                    on_send_error => sub {
+                        my ( $self, $errno ) = @_;
+                        $f->fail("Send error: $errno");
+                    },
                     on_recv_error => sub {
                         my ( $self, $errno ) = @_;
-                        $f->fail('Receive error');
+                        $f->fail("Receive error: $errno");
                     },
                     on_recv => $on_recv,
                 );
