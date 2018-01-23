@@ -4,7 +4,6 @@ use Moo;
 use warnings NONFATAL => 'all';
 
 use Future;
-use POSIX 'ECONNREFUSED';
 use Time::HiRes;
 use Carp;
 use Net::Ping qw();
