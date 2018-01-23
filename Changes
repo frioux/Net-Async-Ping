@@ -2,8 +2,8 @@ Revision history for {{$dist->name}}
 
 {{$NEXT}}
   - add ping vs. raw socket advantages to ICMP and ICMPv6 documentation
-  - raw ICMP now only uses a single socket and internal reply dispatching for
-    increased performance (O vs. O^2)
+  - raw ICMP and ICMPv6 now only uses a single socket and internal reply
+    dispatching for increased performance (O vs. O^2)
   - don't use Net::Frame::Simple for ICMP and ICMPv6 reply packet parsing for
     improved performance
 
