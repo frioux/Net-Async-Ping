@@ -100,8 +100,20 @@ sub run_tests
            });
 
         like exception { $f->get }, qr/expected failure/, "type: $type, legacy: $legacy, expected failure";
-        $expected += 5; # 5 tests above, not including unreachable
 
+        @params = $legacy ? ($loop, 'localhost') : ('localhost');
+        $p->ping(@params)
+           ->then(sub {
+              pass "type: $type, legacy: $legacy, pinged localhost!";
+              note("success future: @_");
+              Future->done
+           })->else(sub {
+              fail "type: $type, legacy: $legacy, pinged localhost!";
+              note("failure future: @_");
+              Future->fail('failed to ping localhost!')
+           })->get;
+
+        $expected += 6; # 6 tests above, not including unreachable
         $loop->remove($p) if !$legacy;
     }
 
