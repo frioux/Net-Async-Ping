@@ -1,6 +1,8 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+
+0.004000  2018-01-24 09:09:21+01:00 Europe/Vienna
   - add ping vs. raw socket advantages to ICMP and ICMPv6 documentation
   - raw ICMP and ICMPv6 now only uses a single socket and internal reply
     dispatching for increased performance (O vs. O^2)
