@@ -1,6 +1,7 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+  - fix ICMP and ICMPv6 destinaton unreachable parsing
 
 0.004000  2018-01-24 09:09:21+01:00 Europe/Vienna
   - add ping vs. raw socket advantages to ICMP and ICMPv6 documentation

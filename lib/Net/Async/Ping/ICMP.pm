@@ -160,7 +160,7 @@ sub _parse_icmp_packet {
             # 8 byte is the length of the ICMP Destination
             # unreachable header
             raw => substr($recv_msg, $offset + 8)
-        );
+        )->unpack;
         # skip if contained packet isn't an icmp packet
         return
             if $ipv4->protocol != NF_IPv4_PROTOCOL_ICMPv4;
