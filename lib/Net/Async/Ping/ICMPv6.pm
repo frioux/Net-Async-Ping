@@ -219,6 +219,7 @@ sub ping {
     $loop->resolver->getaddrinfo(
        host     => $host,
        protocol => IPPROTO_ICMPV6,
+       service  => 0, # to skip the resolver if an IPv6 address was passed
        family   => AF_INET6,
     )->then( sub {
         my $saddr  = $_[0]->{addr};

@@ -214,6 +214,7 @@ sub ping {
     $loop->resolver->getaddrinfo(
        host     => $host,
        protocol => IPPROTO_ICMP,
+       service  => 0, # to skip the resolver if an IPv4 address was passed
        family   => AF_INET,
     )->then( sub {
         my $saddr  = $_[0]->{addr};

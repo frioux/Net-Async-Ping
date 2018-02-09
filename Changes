@@ -1,6 +1,9 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+  - enable skipping the resolver when passing an IP address to ICMP or ICMPv6
+    because the resolver forks and consumes high amounts of memory when
+    pinging a large amount of IPs in parallel
 
 0.004001  2018-01-24 10:24:36+01:00 Europe/Vienna
   - fix ICMP and ICMPv6 destinaton unreachable parsing
