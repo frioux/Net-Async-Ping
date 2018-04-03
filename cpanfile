@@ -1,5 +1,5 @@
 requires 'perl' => '5.010';
-requires 'IO::Async' => 0.61;
+requires 'IO::Async' => 0.72;
 requires 'Moo' => 1.00;
 requires 'Future';
 requires 'Time::HiRes' => 0;
